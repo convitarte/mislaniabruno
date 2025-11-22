@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>Câmera Moldura</title>
+    <!-- 
+    CONFIGURAÇÕES ANTI-ZOOM:
+    - object-fit: contain (em vez de cover) para evitar zoom
+    - Resoluções reduzidas na câmera
+    - Proporção natural da câmera mantida
+    -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .camera-view {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #222;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transform: scaleX(-1);
+            display: block;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 10;
+            padding: 0 20px;
+        }
+
+        .capture-btn {
+            width: 100px;
+            height: 100px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+            pointer-events: auto;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .capture-btn:active {
+            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .capture-btn::before {
+            content: '';
+            width: 75px;
+            height: 75px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+        }
+
+        .fullscreen-btn {
+            position: absolute;
+            bottom: 60px;
+            left: 20px;
+            width: 55px;
+            height: 55px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: #fff;
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+            z-index: 10;
+        }
+
+        .switch-camera {
+            position: absolute;
+            bottom: 60px;
+            right: 20px;
+            width: 55px;
+            height: 55px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: #fff;
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+            z-index: 10;
+        }
+
+        .switch-camera:active, .fullscreen-btn:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(0.95);
+        }
+
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            max-width: 80%;
+            z-index: 15;
+        }
+
+        .photo-preview {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .photo-preview img {
+            max-width: 100%;
+            max-height: calc(100% - 100px);
+            object-fit: contain;
+        }
+
+        .photo-controls {
+            position: absolute;
+            bottom: 65px;
+            display: flex;
+            gap: 90px;
+            padding: 0 20px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 15px 25px;
+            border: 2px solid #fff;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            -webkit-tap-highlight-color: transparent;
+            min-width: 100px;
+        }
+
+        .btn:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(0.95);
+        }
+
+        .frame-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .fullscreen-notice {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+            display: none;
+        }
+
+        /* Melhorias específicas para iPhone */
+        @media (max-width: 414px) {
+            .controls {
+                bottom: 45px;
+                gap: 15px;
+            }
+            
+            .capture-btn {
+                width: 95px;
+                height: 95px;
+            }
+            
+            .capture-btn::before {
+                width: 70px;
+                height: 70px;
+            }
+            
+            .switch-camera {
+                width: 50px;
+                height: 50px;
+                font-size: 18px;
+                bottom: 50px;
+                right: 15px;
+            }
+            
+            .fullscreen-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 18px;
+                bottom: 50px;
+                left: 15px;
+            }
+            
+            .photo-controls {
+                bottom: 60px;
+                gap: 85px;
+            }
+            
+            .btn {
+                padding: 12px 20px;
+                font-size: 15px;
+                min-width: 90px;
+            }
+        }
+
+        /* iPhone SE e dispositivos muito pequenos */
+        @media (max-width: 375px) {
+            .controls {
+                bottom: 40px;
+                gap: 12px;
+            }
+            
+            .capture-btn {
+                width: 90px;
+                height: 90px;
+            }
+            
+            .capture-btn::before {
+                width: 65px;
+                height: 65px;
+            }
+            
+            .switch-camera, .fullscreen-btn {
+                width: 45px;
+                height: 45px;
+                font-size: 16px;
+                bottom: 45px;
+            }
+            
+            .switch-camera {
+                right: 12px;
+            }
+            
+            .fullscreen-btn {
+                left: 12px;
+            }
+            
+            .photo-controls {
+                bottom: 55px;
+                gap: 80px;
+            }
+            
+            .btn {
+                padding: 10px 18px;
+                font-size: 14px;
+                min-width: 85px;
+            }
+        }
+
+        /* iPhone com notch (iPhone X e posteriores) */
+        @supports (padding: max(0px)) {
+            .controls {
+                bottom: max(50px, env(safe-area-inset-bottom) + 35px);
+            }
+            
+            .switch-camera {
+                bottom: max(60px, env(safe-area-inset-bottom) + 40px);
+                right: max(15px, env(safe-area-inset-right) + 5px);
+            }
+            
+            .fullscreen-btn {
+                bottom: max(60px, env(safe-area-inset-bottom) + 40px);
+                left: max(15px, env(safe-area-inset-left) + 5px);
+            }
+            
+            .photo-controls {
+                bottom: max(65px, env(safe-area-inset-bottom) + 50px);
+            }
+        }
+
+        /* Melhorias para orientação landscape no iPhone */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .controls {
+                bottom: 23px;
+                gap: 10px;
+            }
+            
+            .capture-btn {
+                width: 80px;
+                height: 80px;
+            }
+            
+            .capture-btn::before {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .switch-camera, .fullscreen-btn {
+                width: 42px;
+                height: 42px;
+                font-size: 14px;
+                bottom: 25px;
+            }
+            
+            .switch-camera {
+                right: 10px;
+            }
+            
+            .fullscreen-btn {
+                left: 10px;
+            }
+            
+            .photo-controls {
+                bottom: 55px;
+                gap: 75px;
+            }
+            
+            .btn {
+                padding: 8px 15px;
+                font-size: 13px;
+                min-width: 80px;
+            }
+        }
+
+        /* Melhorias para telas muito altas (iPhone Pro Max) */
+        @media (min-height: 900px) {
+            .controls {
+                bottom: 40px;
+                gap: 20px;
+            }
+            
+            .capture-btn {
+                width: 110px;
+                height: 110px;
+            }
+            
+            .capture-btn::before {
+                width: 85px;
+                height: 85px;
+            }
+            
+            .switch-camera, .fullscreen-btn {
+                width: 55px;
+                height: 55px;
+                font-size: 20px;
+                bottom: 50px;
+            }
+            
+            .switch-camera {
+                right: 25px;
+            }
+            
+            .fullscreen-btn {
+                left: 25px;
+            }
+        }
+
+        /* Media queries para diferentes tamanhos */
+        @media (max-height: 600px) {
+            .controls {
+                bottom: 30px;
+                gap: 15px;
+            }
+            
+            .capture-btn {
+                width: 90px;
+                height: 90px;
+            }
+            
+            .capture-btn::before {
+                width: 70px;
+                height: 70px;
+            }
+            
+            .switch-camera, .fullscreen-btn {
+                width: 47px;
+                height: 47px;
+                font-size: 20px;
+                bottom: 30px;
+            }
+            
+            .fullscreen-btn {
+                left: 15px;
+            }
+            
+            .switch-camera {
+                right: 15px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .camera-container {
+                max-width: 430px;
+                height: 100vh;
+                margin: 0 auto;
+            }
+        }
+
+        /* Evita scroll em dispositivos móveis */
+        @media (max-width: 767px) {
+            body {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+            }
+        }
+
+        /* Estilos para tela cheia */
+        :fullscreen {
+            background: #000 !important;
+        }
+
+        :-webkit-full-screen {
+            background: #000 !important;
+        }
+
+        :-moz-full-screen {
+            background: #000 !important;
+        }
+
+        :-ms-fullscreen {
+            background: #000 !important;
+        }
+    </style>
+</head>
+<body>
+    <img id="frameImage" src="moldura.png" style="display: none;" crossorigin="anonymous">
+
+    <div class="camera-container">
+        <div class="camera-view">
+            <img id="frameOverlay" src="moldura.png" alt="Moldura" class="frame-overlay" crossorigin="anonymous">
+            <video id="video" autoplay muted playsinline webkit-playsinline></video>
+            <div id="error" class="error-message" style="display: none;">
+                <h3>Erro ao acessar a câmera</h3>
+                <p>Verifique se você permitiu o acesso à câmera e tente novamente.</p>
+            </div>
+        </div>
+
+        <div class="fullscreen-notice" id="fullscreenNotice">
+            Toque para sair da tela cheia
+        </div>
+
+        <button class="fullscreen-btn" id="fullscreenBtn" title="Tela cheia">
+            ⛶
+        </button>
+        
+        <button class="switch-camera" id="switchCamera" title="Trocar câmera">
+            ⇋
+        </button>
+
+        <div class="controls">
+            <button class="capture-btn" id="captureBtn" title="Tirar foto"></button>
+        </div>
+
+        <div class="photo-preview" id="photoPreview">
+            <img id="photoImg" alt="Foto capturada">
+            <div class="photo-controls">
+                <button class="btn" id="savePhoto">Salvar</button>
+                <button class="btn" id="retakePhoto">Nova Foto</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas" style="display: none;"></canvas>
+
+<script src="script.js"></script>
+</body>
+</html>
